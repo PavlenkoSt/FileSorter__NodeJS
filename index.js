@@ -65,12 +65,14 @@ const writeFiles = fileList => {
   }
 };
 
-const execute = () => {
+const run = () => {
   const filesSrc = fs.readdirSync(pathToSrcFiles);
 
   const fileList = getFileListToSort(filesSrc, pathToSrcFiles);
 
   writeFiles(fileList);
+
+  console.log('Done, check it out!');
 };
 
-execute();
+run();
