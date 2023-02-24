@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const util = require('util');
 
 const SRC_DIR = 'filesSrc';
 const DIST_DIR = 'filesDist';
@@ -7,21 +8,29 @@ const DIST_DIR = 'filesDist';
 const pathToSrcFiles = path.join(__dirname, SRC_DIR);
 const pathToDistFiles = path.join(__dirname, DIST_DIR);
 
-const distList = {
-  // "A" : [...files]
-  // file -> { name, path }
-};
+const readdir = util.promisify(fs.readdir);
+const stat = util.promisify(fs.stat);
+const exists = util.promisify(fs.exists);
+const rm = util.promisify(fs.rm);
+const mkdir = util.promisify(fs.mkdir);
+const copyFile = util.promisify(fs.copyFile);
 
-const getFileListToSort = (files, pathParam) => {
-  files.forEach(item => {
+const getFileListToSort = async (files, pathParam, processedFiles = {}) => {
+  let distList = processedFiles;
+
+  for await (item of files) {
     const filePath = path.join(pathParam, item);
 
-    if (fs.statSync(filePath).isDirectory()) {
-      const filesToCheck = fs.readdirSync(filePath);
+    const isDirectory = (await stat(filePath)).isDirectory();
 
-      getFileListToSort(filesToCheck, path.join(pathParam, item));
+    if (isDirectory) {
+      const filesToCheck = await readdir(filePath);
 
-      return;
+      const filesFromDirs = await getFileListToSort(filesToCheck, path.join(pathParam, item));
+
+      distList = { ...distList, ...filesFromDirs };
+
+      continue;
     }
 
     const dirName = item[0].toUpperCase();
@@ -33,46 +42,45 @@ const getFileListToSort = (files, pathParam) => {
 
     if (!distList[dirName]) {
       distList[dirName] = [fileInfo];
-      return;
+
+      continue;
     }
 
     distList[dirName].push(fileInfo);
-  });
+  }
 
   return distList;
 };
 
-const writeFiles = fileList => {
-  const folderExist = fs.existsSync(pathToDistFiles);
+const writeFiles = async fileList => {
+  const folderExist = await exists(pathToDistFiles);
 
   if (folderExist) {
-    fs.rmSync(pathToDistFiles, { recursive: true, force: true });
+    await rm(pathToDistFiles, { recursive: true, force: true });
   }
 
-  fs.mkdirSync(pathToDistFiles);
+  await mkdir(pathToDistFiles);
 
   for (const key in fileList) {
     const letterDir = path.join(pathToDistFiles, key);
 
-    fs.mkdirSync(letterDir);
+    await mkdir(letterDir);
 
-    fileList[key].forEach(fileInfo => {
+    fileList[key].forEach(async fileInfo => {
       const srcFilePath = fileInfo.path;
       const distFilePath = path.join(letterDir, fileInfo.name);
 
-      fs.copyFileSync(srcFilePath, distFilePath);
+      await copyFile(srcFilePath, distFilePath);
     });
   }
 };
 
-const run = () => {
-  const filesSrc = fs.readdirSync(pathToSrcFiles);
+const run = async () => {
+  const files = await readdir(pathToSrcFiles);
 
-  const fileList = getFileListToSort(filesSrc, pathToSrcFiles);
+  const distList = await getFileListToSort(files, pathToSrcFiles);
 
-  writeFiles(fileList);
-
-  console.log('Done, check it out!');
+  await writeFiles(distList);
 };
 
 run();
