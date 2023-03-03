@@ -1,19 +1,11 @@
-const fs = require('fs');
+const { readdir, stat, rm, mkdir, copyFile, access } = require('fs/promises');
 const path = require('path');
-const util = require('util');
 
 const SRC_DIR = 'filesSrc';
 const DIST_DIR = 'filesDist';
 
 const pathToSrcFiles = path.join(__dirname, SRC_DIR);
 const pathToDistFiles = path.join(__dirname, DIST_DIR);
-
-const readdir = util.promisify(fs.readdir);
-const stat = util.promisify(fs.stat);
-const exists = util.promisify(fs.exists);
-const rm = util.promisify(fs.rm);
-const mkdir = util.promisify(fs.mkdir);
-const copyFile = util.promisify(fs.copyFile);
 
 const getFileListToSort = async (files, pathParam, processedFiles = {}) => {
   let distList = processedFiles;
@@ -52,8 +44,17 @@ const getFileListToSort = async (files, pathParam, processedFiles = {}) => {
   return distList;
 };
 
+const isFileExist = async path => {
+  try {
+    await access(path);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
 const writeFiles = async fileList => {
-  const folderExist = await exists(pathToDistFiles);
+  const folderExist = await isFileExist(pathToDistFiles);
 
   if (folderExist) {
     await rm(pathToDistFiles, { recursive: true, force: true });
